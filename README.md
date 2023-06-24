@@ -1,3 +1,4 @@
 # Telegram-Account-Creator
 
-https://github.com/Aloneintokyoo/Telegram-Account-Creator/blob/sms-active-ru/ScreenShot/Telegram-Account-Creator.png
+
+https://vscode.dev/github/pirhof/Telegram-Account-Creator-1/blob/sms-active-ru/ScreenShot/Telegram-Account-Creator.png
