@@ -1,3 +1,3 @@
 # Telegram-Account-Creator
 
-file:///home/mahdi/Telegram-Account-Creator/ScreenShot/Telegram-Account-Creator.png
+https://github.com/Aloneintokyoo/Telegram-Account-Creator/blob/sms-active-ru/ScreenShot/Telegram-Account-Creator.png
