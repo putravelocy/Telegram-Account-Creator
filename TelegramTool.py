@@ -192,7 +192,7 @@ try:
     from telethon.errors import rpcerrorlist, SessionPasswordNeededError, PhoneNumberUnoccupiedError
     from configparser import ConfigParser, NoSectionError, NoOptionError
 except Exception as e:
-    input(f"İçe aktarma hatası: {e}")
+    input(f"Import error: {e}")
 
 
 # CONFIG
@@ -213,12 +213,12 @@ try:
     # CONFIG
 except NoSectionError as e:
     input(
-        f'Hata!!, config dosyasında \
-            {str(e).strip("No section: ")} bölümü bulunamadı')
+        f'Error!!, in the config file \
+            {str(e).strip("No section: ")} partition not found')
 except NoOptionError as e:
     input(
-        f'Hata!!, config dosyasında \
-             {str(e).strip("No section: ")} bölümü bulunamadı')
+        f'Error!!, in the config file \
+             {str(e).strip("No section: ")} partition not found')
 
 
 
@@ -250,7 +250,8 @@ class AccountMaker:
             'service', self.product), ('operator', self.operator), ('country', self.country))
         self.balance_param = (('api_key', self.token),
                               ('action', 'getBalance'))
-        self.url = 'https://sms-activate.ru/stubs/handler_api.php'
+        #self.url = 'https://sms-activate.ru/stubs/handler_api.php'
+        self.url = 'https://sms-activation-service.com/stubs/handler_api'
 
     def create_account(self):
         balance = float(str(get(self.url,
@@ -264,7 +265,7 @@ class AccountMaker:
             phone = response[2]
             id = response[1]
             print(self.color.OKCYAN +
-                  f"Numara: {phone}   |   Numara Kimliği: {id}\n" + self.color.ENDC)
+                  f"Number: {phone}   |   Number ID: {id}\n" + self.color.ENDC)
             try:
                 client = TelegramClient(
                     f"sessions/{phone}", self.api_id, self.api_hash)
@@ -282,7 +283,7 @@ class AccountMaker:
                 self.cancel_order(phone=phone, id=id, flood=True)
                 return self.create_account()
         except KeyboardInterrupt:
-            print(self.color.FAIL+"\nÇıkılıyor...\n"+self.color.ENDC)
+            print(self.color.FAIL+"\nexiting...\n"+self.color.ENDC)
             sleep(2)
             return main()
         except IndexError:
@@ -302,12 +303,12 @@ class AccountMaker:
                 self.cancel_order(id, phone)
                 return self.create_account()
             response = str(get(self.url, params=params).text)
-            print(self.color.OKBLUE+"Kod Bekleniyor....."+self.color.ENDC)
+            print(self.color.OKBLUE+"Code Pending....."+self.color.ENDC)
             if response != "STATUS_WAIT_CODE":
                 try:
                     code = response.split(":")[-1]
                     print(self.color.OKGREEN +
-                          f"\nKod Alındı: {code}\n"+self.color.ENDC)
+                          f"\nCode Received: {code}\n"+self.color.ENDC)
                     client.sign_in(phone=phone, code=code)
                     #client.sign_up(code=code, first_name="Users", phone=phone)
                     print(client.is_user_authorized())
@@ -321,7 +322,7 @@ class AccountMaker:
                     return main()
                 except SessionPasswordNeededError:
                     print(
-                        self.color.FAIL+"\nBu hesap daha önce başka biri tarafından alınmış ve şifre eklenmiş, üzgünüm paran geri gelmeyecek :(\n" + self.color.ENDC)
+                        self.color.FAIL+"\nThis account was previously taken by someone else and the password was added, sorry you will not get your money back :(\n" + self.color.ENDC)
                     self.wait()
                     return self.create_account()
                 except PhoneNumberUnoccupiedError:
@@ -330,7 +331,7 @@ class AccountMaker:
                     client.sign_up(phone_code_hash=send_code.phone_code_hash,
                                    code=code, first_name=choice(names), phone=phone)
                     print(
-                        self.color.OKGREEN+f"\nHesap Oluşturuldu!!!\nHesap Adı: {client.get_me().first_name}\n"+self.color.ENDC)
+                        self.color.OKGREEN+f"\nAccount Created!!!\nAccount name: {client.get_me().first_name}\n"+self.color.ENDC)
                     client.disconnect()
                     self.save_number(phone)
                     self.finish(id)
@@ -348,13 +349,13 @@ class AccountMaker:
                   ('status', '-1'), ('id', id))
         if ban:
             print(self.color.FAIL +
-                  '\n[*] Numara telegram tarafından engellenmiş, Numara iptal ediliyor..'+self.color.ENDC)
+                  '\n[*] Number is blocked by telegram, Number is canceling..'+self.color.ENDC)
         elif flood:
             print(self.color.FAIL +
-                  '\n[*] Numarada bekleme süresi var, Numara iptal ediliyor..'+self.color.ENDC)
+                  '\n[*] Number has a waiting period, Number is canceling..'+self.color.ENDC)
         else:
             print(self.color.FAIL +
-                  "\n[*] Belirlenen sürede kod alınamadı, Numara iptal ediliyor.."+self.color.ENDC)
+                  "\n[*] Couldn't get the code in the specified time, Number canceling.."+self.color.ENDC)
         if get(self.url, params=params).text == "ACCESS_CANCEL":
             self.wait()
         try:
@@ -377,7 +378,7 @@ class AccountMaker:
 
     def wait(self):
         print(self.color.WARNING +
-              "\n Yeni hesap için 10 saniye bekleniyor..."+self.color.ENDC)
+              "\n Y10 seconds waiting for new account..."+self.color.ENDC)
         sleep(10)
 
 
@@ -387,24 +388,24 @@ def login_accounts():
     phone_data = data["phone_numbers"]
     for id, number in enumerate(phone_data):
         print(f"[{id}] {number}")
-    id = input("Lütfen giriş yapmak istediğiniz hesabın numarasını yazınız :> ")
+    id = input("Please enter the Number of the account you want to login :> ")
     if not id:
-        print("Seçim yapmadınız menüye yönlendiriliyorsunuz!!")
+        print("You have not made a selection, you are being redirected to the menu!!")
         return menu()
     selected_number = phone_data[int(id)]
-    print(f"Seçtiğiniz numara: [{selected_number}]\n")
-    print(f"Giriş deneniyor lütfen bekleyin..")
+    print(f"Number of your choice: [{selected_number}]\n")
+    print(f"Trying to login please wait..")
     client = TelegramClient("sessions/"+selected_number, c_api_id, c_ap_hash)
     client.connect()
     if client.is_user_authorized():
-        input("Hesap hazırlandı lütfen giriş yapmak için kod isteyin ve enter tuşuna basın (sadece kod isteğinde bulunduğunuzda)")
-        print("Kod bekleniyor...")
+        input("HAccount created please ask for code to login and press enter (only when you request code)")
+        print("Code Pending...")
         while True:
             try:
                 message = client.get_messages(777000, limit=1)
                 code = message[0].message.split(":")[1].split(".")[0]
-                print("Kod alındı!!!!")
-                print(f"Kod:{code}")
+                print("Code received!!!!")
+                print(f"Code:{code}")
                 client.disconnect()
                 break
             except IndexError:
@@ -437,14 +438,15 @@ def check_ban():
     d['phone_numbers'] = list
     with open("data/phones.json", "w") as l:
         dump(d, l)
-    input(bcolors.OKCYAN+"\nNumara Listesi güncellendi, banlanan numaralar ve session dosyaları silindi\n"+bcolors.ENDC)
+    input(bcolors.OKCYAN+"\nNumber List updated, banned numbers and session files deleted\n"+bcolors.ENDC)
     return main()
 
 
 def banner():
     print(bcolors.WARNING+"""
-[+]               Telegram Araçları 
-[+]              Yapımcı Emrecan Ayas 
+[+]               Telegram Tools 
+[+]            Producer Emrecan Ayas 
+[+]         Translated By @Aloneintokyo
 """+bcolors.ENDC)
 
 
@@ -452,8 +454,8 @@ def menu():
     print(bcolors.OKCYAN+"""\n
 *************************** MENÜ ******************************
 *                                                             *
-* [1] Hesap Oluşturucu              [2] Ban Kontrolü          *
-* [Q|q] Çıkış                       [3] Hesaplara giriş yap   *
+* [1] Account Builder               [2] Ban Check             *
+* [Q|q] Exit                        [3] Login to accounts     *
 *                                                             *
 ***************************************************************
 """+bcolors.ENDC)
@@ -461,14 +463,14 @@ def menu():
 
 def main():
     try:
-        system("cls")
+        system("clear")
         banner()
         menu()
-        op = input(bcolors.OKGREEN+"\nMENÜ :> "+bcolors.ENDC)
+        op = input(bcolors.OKGREEN+"\nMENU :> "+bcolors.ENDC)
         if str(op) == "1":
             maker = AccountMaker(token=c_token, country=c_country, operator=c_operator,
                                  product=c_product, api_id=c_api_id, api_hash=c_ap_hash)
-            system("cls")
+            system("clear")
             banner()
             maker.create_account()
         elif str(op) =="2":
@@ -476,18 +478,18 @@ def main():
         elif str(op).lower() == "q":
             exit()
         else:
-            input("Hatalı işlem")
+            input("Incorrect operation")
             return main()
     except KeyboardInterrupt:
-        print("\nÇıkılıyor...")
+        print("\nexiting...")
         exit()
 
 
 if __name__ == "__main__":
     try:
-        system("cls")
+        system("clear")
         banner()
         main()
     except KeyboardInterrupt:
-        print("\nÇıkılıyor...")
+        print("\nexiting...")
         exit()
