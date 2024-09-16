@@ -1,3 +1,14 @@
+import requests
+from random import choice
+from time import sleep
+from json import load, loads, dump
+from os import system, remove
+from sys import exit
+from telethon.sync import TelegramClient
+from telethon.errors import rpcerrorlist, SessionPasswordNeededError, PhoneNumberUnoccupiedError
+from configparser import ConfigParser, NoSectionError, NoOptionError
+
+# Country codes dictionary remains the same
 countrys = {
     "Russia": "0",
     "Ukraine": "1",
@@ -181,20 +192,6 @@ countrys = {
     "Southkorea": "190"
 }
 
-try:
-    from random import choice
-    from requests import get
-    from time import sleep
-    from json import load, loads, dump, decoder
-    from os import system, remove
-    from sys import exit
-    from telethon.sync import TelegramClient
-    from telethon.errors import rpcerrorlist, SessionPasswordNeededError, PhoneNumberUnoccupiedError
-    from configparser import ConfigParser, NoSectionError, NoOptionError
-except Exception as e:
-    input(f"Import error: {e}")
-
-
 # CONFIG
 try:
     config = ConfigParser()
@@ -204,26 +201,16 @@ try:
     c_country = config.get('sim_api', 'country')
     c_operator = config.get('sim_api', 'operator')
     c_product = config.get('sim_api', 'product')
-    c_token = config.get('sim_api', 'active_ru_key')
+    c_token = config.get('sim_api', 'smshub_api_key')
 
     # Telegram
     c_api_id = config.get('telegram', 'api_id')
-    c_ap_hash = config.get('telegram', 'api_hash')
+    c_api_hash = config.get('telegram', 'api_hash')
 
-    # CONFIG
 except NoSectionError as e:
-    input(
-        f'Error!!, in the config file \
-            {str(e).strip("No section: ")} partition not found')
+    input(f'Error!! In the config file, {str(e).strip("No section: ")} partition not found')
 except NoOptionError as e:
-    input(
-        f'Error!!, in the config file \
-             {str(e).strip("No section: ")} partition not found')
-
-
-
-
-
+    input(f'Error!! In the config file, {str(e).strip("No option: ")} option not found')
 
 class bcolors:
     HEADER = '\033[95m'
@@ -236,7 +223,6 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
 class AccountMaker:
     def __init__(self, token, country, operator, product, api_id, api_hash):
         self.color = bcolors
@@ -246,95 +232,101 @@ class AccountMaker:
         self.product = product
         self.api_id = api_id
         self.api_hash = api_hash
-        self.buy_param = (('api_key', self.token), ('action', 'getNumber'), (
-            'service', self.product), ('operator', self.operator), ('country', self.country))
-        self.balance_param = (('api_key', self.token),
-                              ('action', 'getBalance'))
-        #self.url = 'https://sms-activate.ru/stubs/handler_api.php'
-        self.url = 'https://sms-activation-service.com/stubs/handler_api'
+        self.url = 'https://smshub.org/stubs/handler_api.php'
 
     def create_account(self):
-        balance = float(str(get(self.url,
-                                params=self.balance_param).text).split(":")[-1])
+        balance = self.get_balance()
         try:
             self.counter = 60
-            print(self.color.OKGREEN +
-                  f"\nBalance : {balance}\n"+self.color.ENDC)
-            response = str(
-                get(self.url, params=self.buy_param).text).split(":")
-            phone = response[2]
-            id = response[1]
-            print(self.color.OKCYAN +
-                  f"Number: {phone}   |   Number ID: {id}\n" + self.color.ENDC)
+            print(self.color.OKGREEN + f"\nBalance : {balance}\n" + self.color.ENDC)
+            number = self.get_number()
+            if not number:
+                print(self.color.FAIL + "Failed to get a number. Retrying..." + self.color.ENDC)
+                return self.create_account()
+            
+            print(self.color.OKCYAN + f"Number: {number['phone']}   |   Number ID: {number['id']}\n" + self.color.ENDC)
+            
             try:
-                client = TelegramClient(
-                    f"sessions/{phone}", self.api_id, self.api_hash)
+                client = TelegramClient(f"sessions/{number['phone']}", self.api_id, self.api_hash)
                 client.connect()
-                send_code = client.send_code_request(phone=phone)
-                self.code_sent(id)
-                return self.get_code(client, id, phone, send_code)
+                send_code = client.send_code_request(phone=number['phone'])
+                self.set_status(number['id'], 1)  # Set status to WAITING_FOR_SMS
+                return self.get_code(client, number, send_code)
             except rpcerrorlist.PhoneNumberBannedError:
-                self.cancel_order(phone=phone, id=id, ban=True)
+                self.cancel_order(number, ban=True)
                 return self.create_account()
             except rpcerrorlist.FloodWaitError:
-                self.cancel_order(phone=phone, id=id, flood=True)
+                self.cancel_order(number, flood=True)
                 return self.create_account()
             except rpcerrorlist.PhoneNumberInvalidError:
-                self.cancel_order(phone=phone, id=id, flood=True)
+                self.cancel_order(number, invalid=True)
                 return self.create_account()
         except KeyboardInterrupt:
             print(self.color.FAIL+"\nexiting...\n"+self.color.ENDC)
             sleep(2)
             return main()
         except IndexError:
-            input(response)
+            input("An error occurred. Please check your configuration and try again.")
             return main()
 
-    def code_sent(self, id):
-        params = (('api_key', self.token), ('action', 'setStatus'),
-                  ('status', '1'), ('id', id))
-        get(self.url, params=params)
+    def get_balance(self):
+        params = {'api_key': self.token, 'action': 'getBalance'}
+        response = requests.get(self.url, params=params)
+        return float(response.text.split(':')[1])
 
-    def get_code(self, client, id, phone, send_code):
-        params = (('api_key', self.token),
-                  ('action', 'getStatus'), ('id', id),)
-        while True:
-            if self.counter == 0:
-                self.cancel_order(id, phone)
-                return self.create_account()
-            response = str(get(self.url, params=params).text)
-            print(self.color.OKBLUE+"Code Pending....."+self.color.ENDC)
-            if response != "STATUS_WAIT_CODE":
+    def get_number(self):
+        params = {
+            'api_key': self.token,
+            'action': 'getNumber',
+            'service': self.product,
+            'operator': self.operator,
+            'country': self.country
+        }
+        response = requests.get(self.url, params=params)
+        if response.text.startswith('ACCESS_NUMBER'):
+            _, phone_id, phone_number = response.text.split(':')
+            return {'id': phone_id, 'phone': phone_number}
+        return None
+
+    def set_status(self, activation_id, status):
+        params = {
+            'api_key': self.token,
+            'action': 'setStatus',
+            'status': status,
+            'id': activation_id
+        }
+        requests.get(self.url, params=params)
+
+    def get_code(self, client, number, send_code):
+        while self.counter > 0:
+            params = {'api_key': self.token, 'action': 'getStatus', 'id': number['id']}
+            response = requests.get(self.url, params=params)
+            print(self.color.OKBLUE + "Code Pending....." + self.color.ENDC)
+            
+            if response.text.startswith('STATUS_OK'):
+                code = response.text.split(':')[1]
+                print(self.color.OKGREEN + f"\nCode Received: {code}\n" + self.color.ENDC)
                 try:
-                    code = response.split(":")[-1]
-                    print(self.color.OKGREEN +
-                          f"\nCode Received: {code}\n"+self.color.ENDC)
-                    client.sign_in(phone=phone, code=code)
-                    #client.sign_up(code=code, first_name="Users", phone=phone)
+                    client.sign_in(phone=number['phone'], code=code)
                     print(client.is_user_authorized())
                     client.disconnect()
-                    self.save_number(phone)
-                    self.finish(id)
+                    self.save_number(number['phone'])
+                    self.set_status(number['id'], 6)  # Set status to COMPLETED
                     self.wait()
                     return self.create_account()
-                except IndexError:
-                    input(response)
-                    return main()
                 except SessionPasswordNeededError:
-                    print(
-                        self.color.FAIL+"\nThis account was previously taken by someone else and the password was added, sorry you will not get your money back :(\n" + self.color.ENDC)
+                    print(self.color.FAIL + "\nThis account was previously taken by someone else and the password was added, sorry you will not get your money back :(\n" + self.color.ENDC)
                     self.wait()
                     return self.create_account()
                 except PhoneNumberUnoccupiedError:
                     with open("data/names.txt") as f:
                         names = str(f.read()).split("\n")
                     client.sign_up(phone_code_hash=send_code.phone_code_hash,
-                                   code=code, first_name=choice(names), phone=phone)
-                    print(
-                        self.color.OKGREEN+f"\nAccount Created!!!\nAccount name: {client.get_me().first_name}\n"+self.color.ENDC)
+                                   code=code, first_name=choice(names), phone=number['phone'])
+                    print(self.color.OKGREEN + f"\nAccount Created!!!\nAccount name: {client.get_me().first_name}\n" + self.color.ENDC)
                     client.disconnect()
-                    self.save_number(phone)
-                    self.finish(id)
+                    self.save_number(number['phone'])
+                    self.set_status(number['id'], 6)  # Set status to COMPLETED
                     self.wait()
                     return self.create_account()
                 except Exception as e:
@@ -342,24 +334,24 @@ class AccountMaker:
             else:
                 sleep(5)
                 self.counter -= 5
-                continue
 
-    def cancel_order(self, id, phone, ban=False, flood=False):
-        params = (('api_key', self.token), ('action', 'setStatus'),
-                  ('status', '-1'), ('id', id))
+        self.cancel_order(number)
+        return self.create_account()
+
+    def cancel_order(self, number, ban=False, flood=False, invalid=False):
         if ban:
-            print(self.color.FAIL +
-                  '\n[*] Number is blocked by telegram, Number is canceling..'+self.color.ENDC)
+            print(self.color.FAIL + '\n[*] Number is blocked by Telegram, Number is canceling..' + self.color.ENDC)
         elif flood:
-            print(self.color.FAIL +
-                  '\n[*] Number has a waiting period, Number is canceling..'+self.color.ENDC)
+            print(self.color.FAIL + '\n[*] Number has a waiting period, Number is canceling..' + self.color.ENDC)
+        elif invalid:
+            print(self.color.FAIL + '\n[*] Invalid phone number, Number is canceling..' + self.color.ENDC)
         else:
-            print(self.color.FAIL +
-                  "\n[*] Couldn't get the code in the specified time, Number canceling.."+self.color.ENDC)
-        if get(self.url, params=params).text == "ACCESS_CANCEL":
-            self.wait()
+            print(self.color.FAIL + "\n[*] Couldn't get the code in the specified time, Number canceling.." + self.color.ENDC)
+        
+        self.set_status(number['id'], 8)  # Set status to CANCEL
+        self.wait()
         try:
-            remove(f"sessions/{phone}.session")
+            remove(f"sessions/{number['phone']}.session")
         except:
             pass
         return
@@ -368,19 +360,12 @@ class AccountMaker:
         with open("data/phones.json", "r") as f:
             data = load(f)
         data['phone_numbers'].append(number)
-        with open("data/phones.json", "r+") as f:
+        with open("data/phones.json", "w") as f:
             dump(data, f)
 
-    def finish(self, id):
-        params = (('api_key', self.token), ('action', 'setStatus'),
-                  ('status', '6'), ('id', id))
-        get(self.url, params=params)
-
     def wait(self):
-        print(self.color.WARNING +
-              "\n Y10 seconds waiting for new account..."+self.color.ENDC)
+        print(self.color.WARNING + "\n10 seconds waiting for new account..." + self.color.ENDC)
         sleep(10)
-
 
 def login_accounts():
     with open("data/phones.json", "r") as f:
@@ -395,10 +380,10 @@ def login_accounts():
     selected_number = phone_data[int(id)]
     print(f"Number of your choice: [{selected_number}]\n")
     print(f"Trying to login please wait..")
-    client = TelegramClient("sessions/"+selected_number, c_api_id, c_ap_hash)
+    client = TelegramClient("sessions/"+selected_number, c_api_id, c_api_hash)
     client.connect()
     if client.is_user_authorized():
-        input("HAccount created please ask for code to login and press enter (only when you request code)")
+        input("Account created please ask for code to login and press enter (only when you request code)")
         print("Code Pending...")
         while True:
             try:
@@ -411,18 +396,12 @@ def login_accounts():
             except IndexError:
                 continue
 
-
-
-
-
-
-
 def check_ban():
     list = []
     with open("data/phones.json", "r") as f:
         d = load(f)
     for i in d['phone_numbers']:
-        client = TelegramClient(f"sessions/{i}.session", c_api_id, c_ap_hash)
+        client = TelegramClient(f"sessions/{i}.session", c_api_id, c_api_hash)
         client.connect()
         if not client.is_user_authorized():
             try:
@@ -441,7 +420,6 @@ def check_ban():
     input(bcolors.OKCYAN+"\nNumber List updated, banned numbers and session files deleted\n"+bcolors.ENDC)
     return main()
 
-
 def banner():
     print(bcolors.WARNING+"""
 [+]               Telegram Tools 
@@ -449,17 +427,15 @@ def banner():
 [+]         Translated By @Aloneintokyo
 """+bcolors.ENDC)
 
-
 def menu():
     print(bcolors.OKCYAN+"""\n
-*************************** MENÜ ******************************
+*************************** MENU ******************************
 *                                                             *
 * [1] Account Builder               [2] Ban Check             *
 * [Q|q] Exit                        [3] Login to accounts     *
 *                                                             *
 ***************************************************************
 """+bcolors.ENDC)
-
 
 def main():
     try:
@@ -469,12 +445,14 @@ def main():
         op = input(bcolors.OKGREEN+"\nMENU :> "+bcolors.ENDC)
         if str(op) == "1":
             maker = AccountMaker(token=c_token, country=c_country, operator=c_operator,
-                                 product=c_product, api_id=c_api_id, api_hash=c_ap_hash)
+                                 product=c_product, api_id=c_api_id, api_hash=c_api_hash)
             system("clear")
             banner()
             maker.create_account()
-        elif str(op) =="2":
+        elif str(op) == "2":
             check_ban()
+        elif str(op) == "3":
+            login_accounts()
         elif str(op).lower() == "q":
             exit()
         else:
@@ -483,7 +461,6 @@ def main():
     except KeyboardInterrupt:
         print("\nexiting...")
         exit()
-
 
 if __name__ == "__main__":
     try:
